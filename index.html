@@ -518,5 +518,34 @@
 </footer>
 
 <script src="script.js"></script>
+
+<script>
+const QPG_ANALYTICS = "https://qpg-analytics.devaniviaan.workers.dev";
+
+document.querySelectorAll("#games .card").forEach(card => {
+  card.addEventListener("click", () => {
+    const gameName =
+      card.querySelector("h2")?.textContent.trim() || "Unknown Game";
+
+    const session =
+      crypto.randomUUID
+        ? crypto.randomUUID()
+        : Date.now() + "-" + Math.random();
+
+    fetch(QPG_ANALYTICS + "/start", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      keepalive: true,
+      body: JSON.stringify({
+        session: session,
+        game: gameName
+      })
+    }).catch(() => {});
+  });
+});
+</script>
+
 </body>
 </html>
