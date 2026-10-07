@@ -520,31 +520,251 @@
 <script src="script.js"></script>
 
 <script>
-const QPG_ANALYTICS = "https://qpg-analytics.devaniviaan.workers.dev";
+const QPG_ANALYTICS =
+  "https://qpg-analytics.devaniviaan.workers.dev";
 
-document.querySelectorAll("#games .card").forEach(card => {
-  card.addEventListener("click", () => {
-    const gameName =
-      card.querySelector("h2")?.textContent.trim() || "Unknown Game";
+const QPG_PLAYER_KEY = "qpg_player_id";
 
-    const session =
-      crypto.randomUUID
-        ? crypto.randomUUID()
-        : Date.now() + "-" + Math.random();
+/* =========================
+   PERMANENT QPG PLAYER ID
+   ========================= */
 
-    fetch(QPG_ANALYTICS + "/start", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      keepalive: true,
-      body: JSON.stringify({
-        session: session,
-        game: gameName
-      })
-    }).catch(() => {});
+function makeQpgPlayerId() {
+  const randomPart = (
+    crypto.randomUUID
+      ? crypto.randomUUID().replace(/-/g, "").slice(0, 12)
+      : Math.random().toString(36).slice(2, 14)
+  ).toUpperCase();
+
+  return "QPG-" + randomPart;
+}
+
+let qpgPlayerId =
+  localStorage.getItem(QPG_PLAYER_KEY);
+
+if (!qpgPlayerId) {
+  qpgPlayerId = makeQpgPlayerId();
+
+  localStorage.setItem(
+    QPG_PLAYER_KEY,
+    qpgPlayerId
+  );
+}
+
+
+/* =========================
+   PUBLIC QPG LIVE BOX
+   ========================= */
+
+const qpgLiveBox = document.createElement("section");
+
+qpgLiveBox.id = "qpg-live-stats";
+
+qpgLiveBox.innerHTML = `
+  <div style="
+    max-width:900px;
+    margin:28px auto;
+    padding:18px 20px;
+    border:1px solid rgba(255,255,255,.14);
+    border-radius:18px;
+    background:rgba(255,255,255,.05);
+    text-align:center;
+  ">
+
+    <strong>QPG LIVE</strong>
+
+    <span style="margin-left:18px;">
+      🟢
+      <span id="qpg-online">—</span>
+      players online
+    </span>
+
+    <span style="margin-left:18px;">
+      🎮
+      <span id="qpg-plays">—</span>
+      plays in the last 24 hours
+    </span>
+
+  </div>
+`;
+
+const footer = document.querySelector("footer");
+
+if (footer) {
+  footer.before(qpgLiveBox);
+}
+
+
+/* =========================
+   GET PUBLIC STATS
+   ========================= */
+
+async function refreshQpgStats() {
+
+  try {
+
+    const response = await fetch(
+      QPG_ANALYTICS + "/public-stats",
+      {
+        cache: "no-store"
+      }
+    );
+
+    if (!response.ok) return;
+
+    const stats = await response.json();
+
+    const online =
+      document.getElementById("qpg-online");
+
+    const plays =
+      document.getElementById("qpg-plays");
+
+    if (online) {
+      online.textContent =
+        stats.players_online ?? 0;
+    }
+
+    if (plays) {
+      plays.textContent =
+        stats.plays_last_24_hours ?? 0;
+    }
+
+  } catch (error) {
+
+    console.log(
+      "QPG live stats unavailable."
+    );
+
+  }
+}
+
+refreshQpgStats();
+
+/* Refresh every 30 seconds */
+
+setInterval(
+  refreshQpgStats,
+  30000
+);
+
+
+/* =========================
+   GAME TRACKING
+   ========================= */
+
+document
+  .querySelectorAll("#games .card")
+  .forEach(card => {
+
+    card.addEventListener(
+      "click",
+      async event => {
+
+        /*
+        Allow Ctrl+Click,
+        Shift+Click etc.
+        */
+
+        if (
+          event.ctrlKey ||
+          event.metaKey ||
+          event.shiftKey ||
+          event.altKey ||
+          event.button !== 0
+        ) {
+          return;
+        }
+
+        event.preventDefault();
+
+        const gameName =
+          card
+            .querySelector("h2")
+            ?.textContent
+            .trim()
+          || "Unknown Game";
+
+        const destination =
+          card.href;
+
+
+        /* =========================
+           ASK QPG SERVER
+           ========================= */
+
+        try {
+
+          const response =
+            await fetch(
+              QPG_ANALYTICS + "/start",
+              {
+                method: "POST",
+
+                headers: {
+                  "Content-Type":
+                    "application/json"
+                },
+
+                body: JSON.stringify({
+                  player_id:
+                    qpgPlayerId,
+
+                  game:
+                    gameName
+                })
+              }
+            );
+
+
+          const result =
+            await response
+              .json()
+              .catch(() => ({}));
+
+
+          /* =========================
+             BANNED PLAYER
+             ========================= */
+
+          if (
+            response.status === 403 ||
+            result.banned === true
+          ) {
+
+            alert(
+              "Access to QPG games is currently unavailable for this player."
+            );
+
+            return;
+          }
+
+        } catch (error) {
+
+          /*
+          If analytics temporarily
+          goes offline, don't destroy
+          the whole QPG Arcade.
+          */
+
+          console.log(
+            "QPG analytics unavailable."
+          );
+        }
+
+
+        /* =========================
+           OPEN THE GAME
+           ========================= */
+
+        window.location.href =
+          destination;
+
+      }
+    );
+
   });
-});
+
 </script>
 
 </body>
